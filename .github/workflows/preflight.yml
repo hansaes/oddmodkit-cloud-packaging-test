@@ -1,0 +1,43 @@
+name: OddModKit cloud packaging preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oddmodkit-packaging-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.event.repository.private == false
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out test scripts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Check out official SDK snapshot
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: MassiveMiniteam/OddModKit
+          ref: b7ac82de0b64ef3eff744b7c4d6ca22c95d12757
+          path: sdk
+          persist-credentials: false
+
+      - name: Check Windows packaging prerequisites
+        run: ./scripts/Test-CloudPackagingEnvironment.ps1
+
+      - name: Save prerequisite report, not a mod package
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: packaging-preflight-report
+          path: preflight.json
+          if-no-files-found: error
+          retention-days: 1
