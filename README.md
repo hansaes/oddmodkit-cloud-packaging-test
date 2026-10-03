@@ -4,6 +4,8 @@
 
 **当前仅实现前置检查，不是完成的模组打包流水线，也不是队友传送模组。尚未生成可安装包。**
 
+第一轮已经在 GitHub Actions 实际运行：编译器、Windows SDK、官方示例和磁盘检查通过；因尚未获取 UE 5.5 Windows 工具链而中止。详见 [真实运行结果](RESULTS.md)。
+
 ## 这一轮检查什么
 
 - 手动触发 `OddModKit cloud packaging preflight`，只使用公开仓库的标准 `windows-2022` 运行器，最长 10 分钟。
