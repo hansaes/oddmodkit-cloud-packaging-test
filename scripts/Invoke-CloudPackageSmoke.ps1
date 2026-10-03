@@ -61,7 +61,7 @@ function Invoke-BuildCommand {
         $tail = Get-Content -LiteralPath $logPath -Tail 150 | Out-String
         $command.errorCodes = @([regex]::Matches($tail, '\b(?:C\d{4}|MSB\d{4}|NU\d{4})\b') | ForEach-Object { $_.Value } | Select-Object -Unique)
         $command.errorFiles = @([regex]::Matches($tail, '[\w.-]+\.(?:cpp|h|cs)\(\d+(?:,\d+)?\)') | ForEach-Object { $_.Value } | Select-Object -Unique -First 8)
-        $command.errorCategories = @(@('error', 'exception', 'out of memory', 'disk full', 'not enough space', 'not found', 'missing', 'failed') | Where-Object { $tail -match [regex]::Escape($_) })
+        $command.errorCategories = @(@('error', 'exception', 'out of memory', 'disk full', 'not enough space', 'not found', 'missing', 'failed', '403', '404', 'certificate', 'hash mismatch') | Where-Object { $tail -match [regex]::Escape($_) })
     }
     $script:report.commands += $command
     Save-Report
@@ -103,13 +103,21 @@ try {
         'Dependencies' {
             $actualSdkRevision = (& git -C $sdkRoot rev-parse HEAD | Out-String).Trim()
             if ($LASTEXITCODE -ne 0 -or $actualSdkRevision -ne $sdkRevision) { throw 'Official SDK revision mismatch.' }
-            $dependencyTool = Join-Path $engineRoot 'Engine\Binaries\DotNET\GitDependencies\win-x64\GitDependencies.exe'
-            Invoke-BuildCommand -Name 'win64-dependencies' -Program $dependencyTool -Arguments @('--force', '--no-cache', '--threads=4', "--root=$engineRoot", '--exclude=Linux', '--exclude=LinuxArm64', '--exclude=Mac', '--exclude=Android', '--exclude=IOS', '--exclude=TVOS')
             $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
             $visualStudioRoot = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Out-String).Trim()
             if (-not $visualStudioRoot) { throw 'Visual Studio C++ tools are missing.' }
             $toolchains = @(Get-ChildItem -LiteralPath (Join-Path $visualStudioRoot 'VC\Tools\MSVC') -Directory | Where-Object { $_.Name -like '14.38.*' } | Sort-Object Name -Descending)
-            if ($toolchains.Count -eq 0) { throw 'UE 5.5.1 preferred MSVC 14.38 is missing; no unsupported compiler is silently substituted.' }
+            if ($toolchains.Count -eq 0) {
+                $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\setup.exe'
+                if (-not (Test-Path -LiteralPath $installer)) { throw 'The cloud Visual Studio component installer is missing.' }
+                Write-Host 'Installing the official MSVC 14.38 component on the ephemeral cloud runner only.'
+                $compilerInstall = Start-Process -FilePath $installer -ArgumentList @('modify', '--installPath', "`"$visualStudioRoot`"", '--add', 'Microsoft.VisualStudio.Component.VC.14.38.17.8.x86.x64', '--quiet', '--norestart', '--nocache') -WorkingDirectory $engineRoot -WindowStyle Hidden -Wait -PassThru
+                $report.compilerInstallerExitCode = $compilerInstall.ExitCode
+                Save-Report
+                if ($compilerInstall.ExitCode -notin @(0, 3010)) { throw 'Official cloud MSVC component installation failed.' }
+                $toolchains = @(Get-ChildItem -LiteralPath (Join-Path $visualStudioRoot 'VC\Tools\MSVC') -Directory | Where-Object { $_.Name -like '14.38.*' } | Sort-Object Name -Descending)
+                if ($toolchains.Count -eq 0) { throw 'MSVC 14.38 remains unavailable after cloud installation.' }
+            }
             $compilerVersion = $toolchains[0].Name
             $sdkVersion = '10.0.22621.0'
             if (-not (Test-Path -LiteralPath (Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib\$sdkVersion"))) { throw 'Windows SDK 10.0.22621.0 is missing.' }
@@ -134,6 +142,9 @@ try {
 "@ | Set-Content -LiteralPath (Join-Path $configurationRoot 'BuildConfiguration.xml') -Encoding utf8
             $report.compilerVersion = $compilerVersion
             $report.windowsSdkVersion = $sdkVersion
+            Save-Report
+            $dependencyTool = Join-Path $engineRoot 'Engine\Binaries\DotNET\GitDependencies\win-x64\GitDependencies.exe'
+            Invoke-BuildCommand -Name 'win64-dependencies' -Program $dependencyTool -Arguments @('--force', '--no-cache', '--threads=4', "--root=$engineRoot", '--exclude=Linux', '--exclude=LinuxArm64', '--exclude=Mac', '--exclude=Android', '--exclude=IOS', '--exclude=TVOS')
         }
         'Tools' {
             $buildTool = Join-Path $engineRoot 'Engine\Build\BatchFiles\Build.bat'
