@@ -25,3 +25,14 @@
 本机现有 GitHub 登录访问官方 `EpicGames/UnrealEngine` 仍返回 404。下一步先由用户按 Epic 官方流程关联账号、接受组织邀请并确认能读取引擎源码；再选择合法的云端引擎获取方式，验证免费运行器是否能实际完成构建和打包。不会把关联账号等同于已取得预编译 Windows 引擎。
 
 没有下载引擎到本机，没有发布 Steam Workshop，没有读取、修改或上传现有游戏、模组安装或局域网 DLL。
+
+## 真实源代码构建：第一轮
+
+- [运行 37141043114](https://github.com/hansaes/oddmodkit-cloud-packaging-test/actions/runs/37141043114) 已完成，耗时约 8 分钟。
+- 官方 UE 5.5.1 源码在云端获取成功，Win64 依赖同步成功；依赖工具返回 0，耗时约 5 分钟。
+- 同步后 D 盘还剩 103.45 GiB；本轮不是因为磁盘不足失败。
+- 实际失败原因：标准镜像未预装 UE 5.5.1 首选的 MSVC 14.38。未替换为引擎未验证的新版编译器，没有执行引擎编译或模组烹饪。
+- 已加入通过微软官方 Visual Studio Installer 在临时云端运行器内安装 MSVC 14.38 的步骤，再验证真实工具链目录；不在用户电脑安装软件。
+- [第二轮 37141617498](https://github.com/hansaes/oddmodkit-cloud-packaging-test/actions/runs/37141617498) 已启动，结果尚未确认。
+
+所有本机 GitHub 登录令牌仅用于请求官方 API，没有复制到云端。传入第一轮的临时归档地址 Secret 已在源码下载完成后删除。
